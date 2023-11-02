@@ -85,6 +85,8 @@ def _create_prometheus_metric(prom_metric_name):
         labels = [settings.TOPIC_LABEL]
         if settings.MQTT_EXPOSE_CLIENT_ID:
             labels.append("client_id")
+        if not settings.HANDLE_NESTED_TOPIC:
+            labels.extend(["location", "sensor", "sub"])
 
         prom_metrics[prom_metric_name] = Gauge(
             prom_metric_name, "metric generated from MQTT message.", labels
@@ -99,6 +101,15 @@ def _add_prometheus_sample(topic, prom_metric_name, metric_value, client_id):
     labels = {settings.TOPIC_LABEL: topic}
     if settings.MQTT_EXPOSE_CLIENT_ID:
         labels["client_id"] = client_id
+
+    if not settings.HANDLE_NESTED_TOPIC:
+        try:
+            splitted = topic.split('/')
+            labels["location"] = splitted[1]
+            labels["sensor"] = splitted[2]
+            labels["sub"] = splitted[3] if len(splitted) > 3 else None
+        except:
+            pass
 
     prom_metrics[prom_metric_name].labels(**labels).set(metric_value)
     LOG.debug("new value for %s: %s", prom_metric_name, metric_value)
@@ -316,12 +327,13 @@ def _parse_message(raw_topic, raw_payload):
             payload = {"zigbee_availability": payload["state"]}
 
     # parse MQTT topic
-    try:
-        # handle nested topic
-        topic = topic.replace("/", "_")
-    except UnicodeDecodeError:
-        LOG.debug('encountered undecodable topic: "%s"', raw_topic)
-        return None, None
+    if settings.HANDLE_NESTED_TOPIC:
+        try:
+            # handle nested topic
+            topic = topic.replace("/", "_")
+        except UnicodeDecodeError:
+            LOG.debug('encountered undecodable topic: "%s"', raw_topic)
+            return None, None
 
     # handle not converted payload
     if not isinstance(payload, dict):

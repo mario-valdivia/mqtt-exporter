@@ -4,6 +4,8 @@ import os
 PREFIX = os.getenv("PROMETHEUS_PREFIX", "mqtt_")
 TOPIC_LABEL = os.getenv("TOPIC_LABEL", "topic")
 TOPIC = os.getenv("MQTT_TOPIC", "#")
+HANDLE_NESTED_TOPIC = os.getenv("HANDLE_NESTED_TOPIC", "True") == "True"
+
 IGNORED_TOPICS = os.getenv("MQTT_IGNORED_TOPICS", "").split(",")
 ZWAVE_TOPIC_PREFIX = os.getenv("ZWAVE_TOPIC_PREFIX", "zwave/")
 ESPHOME_TOPIC_PREFIXES = os.getenv("ESPHOME_TOPIC_PREFIXES", "").split(",")
@@ -23,3 +25,4 @@ MQTT_EXPOSE_CLIENT_ID = os.getenv("MQTT_EXPOSE_CLIENT_ID", "False") == "True"
 PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "9000"))
 
 KEEP_FULL_TOPIC = os.getenv("KEEP_FULL_TOPIC", "False") == "True"
+
