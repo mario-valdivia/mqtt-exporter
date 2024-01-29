@@ -7,7 +7,7 @@ import logging
 import re
 import signal
 import sys
-
+from time import time
 import paho.mqtt.client as mqtt
 from prometheus_client import Counter, Gauge, metrics, start_http_server
 
@@ -104,7 +104,7 @@ def _add_prometheus_sample(topic, prom_metric_name, metric_value, client_id):
 
     if not settings.HANDLE_NESTED_TOPIC:
         try:
-            splitted = topic.split('/')
+            splitted = topic.split("/")
             labels["location"] = splitted[1]
             labels["sensor"] = splitted[2]
             labels["sub"] = splitted[3] if len(splitted) > 3 else None
@@ -112,6 +112,7 @@ def _add_prometheus_sample(topic, prom_metric_name, metric_value, client_id):
             pass
 
     prom_metrics[prom_metric_name].labels(**labels).set(metric_value)
+    last_call[prom_metric_name] = time()
     LOG.debug("new value for %s: %s", prom_metric_name, metric_value)
 
 
@@ -368,6 +369,27 @@ def expose_metrics(_, userdata, msg):
     prom_msg_counter.labels(**labels).inc()
 
 
+last_call = {}
+
+
+def loop_and_clean(mqtt_client):
+    """loop and clean if needed"""
+    last_time = time()
+    while True:
+        current_time = time()
+        if current_time > (last_time + 1):
+            last_time = current_time
+            to_remove = []
+            for one_metric_name, last_vall_value in last_call.items():
+                if current_time > (last_vall_value + settings.TTL):
+                    prom_metrics[one_metric_name].clear()
+                    LOG.debug("new value for %s: reseted", one_metric_name)
+                    to_remove.append(one_metric_name)
+            for one_metric_name in to_remove:
+                del last_call[one_metric_name]
+        mqtt_client.loop()
+
+
 def main():
     """Start the exporter."""
     if settings.MQTT_V5_PROTOCOL:
@@ -403,6 +425,9 @@ def main():
     if settings.MQTT_USERNAME and settings.MQTT_PASSWORD:
         client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
     client.connect(settings.MQTT_ADDRESS, settings.MQTT_PORT, settings.MQTT_KEEPALIVE)
+    if settings.TTL > 0:
+        loop_and_clean(client)
+        return
     client.loop_forever()
 
 
